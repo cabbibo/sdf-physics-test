@@ -1,0 +1,241 @@
+<html>
+<head>
+
+  <style>
+   @font-face {
+      font-family: "GeoSans";
+      src: url("assests/GeosansLight.ttf");
+    }
+    html{ color:#ffc; background:#000; font-family:"GeoSans" }
+    body{
+      font-size:30px;
+    }
+    a{
+      color: #fff;
+    }
+    a:hover{
+      color: #fff;
+      font-weight:bold;
+    }
+    a:visited{
+      color:#fff;
+    }
+    #README{
+      position:absolute;
+      z-index:999;
+      background:rgba( 0,0,0,.5);
+      margin: 100px;
+      padding: 20px;
+      width: 80%;
+      border: 1px solid white;
+    }
+    #renderer{
+      position:fixed;
+      top:0px;
+      left:0px;
+    }
+    code{
+      color:#fff;
+      font-size:20px;
+    }
+  </style>
+
+</head>
+<body style="margin:0px">
+
+<script src="lib/three.js"></script>
+<script src="lib/jquery.min.js"></script>
+<script src="lib/stats.min.js"></script>
+<script src="lib/underscore.js"></script>
+<script src="lib/TrackballControls.js"></script>
+<script src="lib/ShaderLoader.js"></script>
+
+<script src="PhysicsRenderer.js"></script>
+
+
+<script>
+
+
+  var scene , camera , renderer, clock , controls;
+
+  var SIZE = 256;
+  var simulation;
+
+  var simulationUniforms = {
+  
+    dT:{ type:"f" , value: 0 },
+    time:{type:"f", value:0},
+    noiseSize: { type:"f" , value: .1 }
+
+  }
+
+  var renderUniforms = {
+
+    t_pos:{ type:"t" , value: null }
+
+  }
+
+
+
+
+  var shaders = new ShaderLoader( 'shaders' );
+
+  //shaders.load( 'ss-curlFront'    , 'sim'    , 'simulation' );
+  shaders.load( 'ss-sdf'    , 'sim'    , 'simulation' );
+  shaders.load( 'fs-splat'  , 'splat' , 'fragment'   );
+  shaders.load( 'vs-splat'  , 'splat' , 'vertex'   );
+
+  shaders.shaderSetLoaded = function(){
+
+    init();
+    animate();
+
+  }
+
+
+  
+  function init(){
+
+      /*
+
+         Default threejs stuff!
+
+      */
+      scene = new THREE.Scene();
+
+      var ar = window.innerWidth / window.innerHeight;
+
+      camera = new THREE.PerspectiveCamera( 75, ar , .01, 100 );
+      camera.position.z = 5;
+
+      renderer = new THREE.WebGLRenderer();
+      renderer.setSize( window.innerWidth, window.innerHeight );
+
+      renderer.domElement.id = "renderer"
+      document.body.appendChild( renderer.domElement );
+
+
+      controls = new THREE.TrackballControls( camera );
+      clock = new THREE.Clock();
+
+      stats = new Stats();
+      stats.domElement.style.position = "absolute";
+      stats.domElement.style.left = "0px";
+      stats.domElement.style.bottom = "-30px";
+      stats.domElement.style.zIndex = "999";
+      document.body.appendChild( stats.domElement );
+
+      simulation = new PhysicsRenderer( SIZE , shaders.ss.sim , renderer );
+
+
+      var geo = createLookupGeometry( SIZE );
+
+      var mat = new THREE.ShaderMaterial({
+        uniforms: renderUniforms,
+        vertexShader: shaders.vs.splat,
+        fragmentShader: shaders.fs.splat,
+
+      });
+
+      simulation.setUniforms( simulationUniforms );
+
+      var particles = new THREE.PointCloud( geo , mat );
+      particles.frustumCulled = false;
+
+      scene.add( particles );
+
+
+      simulation.addBoundTexture( renderUniforms.t_pos , 'output' );
+
+
+
+      size = 100;
+ 
+      var data = new Float32Array( SIZE * SIZE  * 4 );
+
+      for( var i =0; i < data.length; i++ ){
+
+        //console.log('ss');
+        if( i % 4 == 1 ){
+          data[ i ] = 10.;// (Math.random() - .5 ) * size;
+        
+        }else{
+          data[i] = (Math.random() - .5 ) * size;
+        }
+
+        if( i % 4 == 4 ){
+          data[i] = 0;
+        }
+
+
+      }
+
+      var texture = new THREE.DataTexture( 
+        data,
+        this.size,
+        this.size,
+        THREE.RGBAFormat,
+        THREE.FloatType
+      );
+
+      texture.minFilter =  THREE.NearestFilter,
+      texture.magFilter = THREE.NearestFilter,
+
+      texture.needsUpdate = true;
+     
+
+      simulation.reset( texture );
+
+      
+      var mousewheel = function( e ){
+
+        particles.rotation.x += e.wheelDeltaY / 1000;
+      
+      }
+    
+      window.addEventListener( 'mousewheel', mousewheel, false );
+
+  }
+
+  function animate(){
+
+    requestAnimationFrame( animate );
+ 
+    simulationUniforms.dT.value = clock.getDelta();
+    simulationUniforms.time.value += simulationUniforms.dT.value;
+    simulation.update();
+
+    controls.update();
+    
+    renderer.render( scene , camera );
+    stats.update();
+
+  }
+
+
+  function createLookupGeometry( size ){        
+        
+    var geo = new THREE.BufferGeometry();
+    var positions = new Float32Array(  size * size * 3 );
+
+    for ( var i = 0, j = 0, l = positions.length / 3; i < l; i ++, j += 3 ) {
+
+      positions[ j     ] = ( i % size ) / size;
+      positions[ j + 1 ] = Math.floor( i / size ) / size;
+    
+    }
+
+    var posA = new THREE.BufferAttribute( positions , 3 );
+    geo.addAttribute( 'position', posA );
+
+    return geo;
+    
+  }
+
+</script>
+ 
+
+
+
+</body>
+<html>
